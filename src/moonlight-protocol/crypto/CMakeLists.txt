@@ -22,10 +22,12 @@ target_include_directories(wolf_crypto PUBLIC .)
 find_package(OpenSSL REQUIRED)
 
 # This depends on OpenSSL
-target_link_libraries_system(
+target_link_libraries(
         wolf_crypto PUBLIC
         OpenSSL::SSL
         OpenSSL::Crypto)
 
 # All users of this library will need at least C++17
 target_compile_features(wolf_crypto PUBLIC cxx_std_17)
+
+target_compile_definitions(wolf_crypto PUBLIC _CRT_SECURE_NO_WARNINGS)

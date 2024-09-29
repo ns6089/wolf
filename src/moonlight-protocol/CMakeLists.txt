@@ -1,6 +1,7 @@
 # Note that headers are optional, and do not affect add_library, but they will not
 # show up in IDEs unless they are listed in add_library.
 project(moonlight)
+cmake_policy(SET CMP0169 OLD)
 
 # Optionally glob, but only for CMake 3.12 or later:
 file(GLOB HEADER_LIST CONFIGURE_DEPENDS
@@ -21,6 +22,8 @@ target_sources(moonlight
         PUBLIC
         ${HEADER_LIST})
 
+include(FetchContent)
+
 # Immutable datastructures
 FetchContent_Declare(
         immer
@@ -33,7 +36,7 @@ set(immer_BUILD_EXTRAS OFF)
 
 set(FPHSA_NAME_MISMATCHED on) # see: https://github.com/arximboldi/immer/issues/204
 FetchContent_MakeAvailable(immer)
-target_link_libraries_system(moonlight PUBLIC immer)
+target_link_libraries(moonlight PUBLIC immer)
 unset(FPHSA_NAME_MISMATCHED)
 
 # FEC implementation
@@ -60,7 +63,7 @@ if (NOT nanors_POPULATED)
     set_source_files_properties(./nanors/rswrapper.c
             PROPERTIES COMPILE_FLAGS "-ftree-vectorize -funroll-loops")
 
-    target_link_libraries_system(moonlight PUBLIC nanors::nanors)
+    target_link_libraries(moonlight PUBLIC nanors::nanors)
 endif ()
 
 # Additional algorithms for dealing with containers
@@ -69,7 +72,7 @@ FetchContent_Declare(
         GIT_REPOSITORY https://github.com/ericniebler/range-v3.git
         GIT_TAG 0.12.0)
 FetchContent_MakeAvailable(range)
-target_link_libraries_system(moonlight PUBLIC range-v3::range-v3)
+target_link_libraries(moonlight PUBLIC range-v3::range-v3)
 
 # Custom parser
 FetchContent_Declare(
@@ -82,8 +85,9 @@ if (NOT peglib_POPULATED)
     FetchContent_Populate(peglib)
 
     add_library(peglib INTERFACE)
-    target_include_directories(peglib INTERFACE ${peglib_SOURCE_DIR})
-    target_link_libraries_system(moonlight PUBLIC peglib)
+    #target_include_directories(peglib INTERFACE ${peglib_SOURCE_DIR})
+    #target_link_libraries(moonlight PUBLIC peglib)
+    target_include_directories(moonlight PUBLIC ${peglib_SOURCE_DIR})
 endif ()
 
 # We need this directory, and users of our library will need it too
@@ -104,3 +108,5 @@ target_link_libraries(
 
 # All users of this library will need at least C++17
 target_compile_features(moonlight PUBLIC cxx_std_17)
+
+target_compile_definitions(moonlight PUBLIC _SILENCE_ALL_CXX23_DEPRECATION_WARNINGS)
