@@ -1,13 +1,14 @@
 #pragma once
 #include <array>
+#include <boost/endian/arithmetic.hpp>
 #include <boost/endian/conversion.hpp>
-#include <core/input.hpp>
 #include <crypto/crypto.hpp>
 #include <cstdint>
-#include <helpers/utils.hpp>
 #include <memory>
 
 namespace moonlight::control {
+
+using netfloat = boost::endian::little_float32_at;
 
 namespace pkts {
 
@@ -204,11 +205,11 @@ struct TOUCH_PACKET : INPUT_PKT {
   uint8_t zero[1]; // Alignment/reserved
   uint16_t rotation;
   uint32_t pointer_id;
-  utils::netfloat x;
-  utils::netfloat y;
-  utils::netfloat pressure_or_distance;
-  utils::netfloat contact_area_major;
-  utils::netfloat contact_area_minor;
+  netfloat x;
+  netfloat y;
+  netfloat pressure_or_distance;
+  netfloat contact_area_major;
+  netfloat contact_area_minor;
 };
 
 enum TOOL_TYPE : uint8_t {
@@ -231,14 +232,14 @@ struct PEN_PACKET : INPUT_PKT {
   TOOL_TYPE tool_type;
   uint8_t pen_buttons;
   uint8_t zero[1]; // Alignment/reserved
-  utils::netfloat x;
-  utils::netfloat y;
-  utils::netfloat pressure_or_distance;
+  netfloat x;
+  netfloat y;
+  netfloat pressure_or_distance;
   uint16_t rotation;
   uint8_t tilt;
   uint8_t zero2[1];
-  utils::netfloat contact_area_major;
-  utils::netfloat contact_area_minor;
+  netfloat contact_area_major;
+  netfloat contact_area_minor;
 };
 
 struct CONTROLLER_ARRIVAL_PACKET : INPUT_PKT {
@@ -253,9 +254,9 @@ struct CONTROLLER_TOUCH_PACKET : INPUT_PKT {
   TOUCH_EVENT_TYPE event_type;
   uint8_t zero[2]; // Alignment/reserved
   uint32_t pointer_id;
-  utils::netfloat x;
-  utils::netfloat y;
-  utils::netfloat pressure;
+  netfloat x;
+  netfloat y;
+  netfloat pressure;
 };
 
 enum MOTION_TYPE : uint8_t {
@@ -278,9 +279,9 @@ struct CONTROLLER_MOTION_PACKET : INPUT_PKT {
   uint8_t controller_number;
   MOTION_TYPE motion_type;
   uint8_t zero[2]; // Alignment/reserved
-  utils::netfloat x;
-  utils::netfloat y;
-  utils::netfloat z;
+  netfloat x;
+  netfloat y;
+  netfloat z;
 };
 
 struct CONTROLLER_BATTERY_PACKET : INPUT_PKT {
