@@ -2,9 +2,7 @@
 #include "data-structures.hpp"
 #include <boost/property_tree/ptree.hpp>
 #include <crypto/crypto.hpp>
-#include <immer/array.hpp>
-#include <immer/box.hpp>
-#include <immer/vector.hpp>
+#include <span>
 
 namespace moonlight {
 
@@ -38,7 +36,7 @@ XML serverinfo(bool isServerBusy,
                const std::string &hostname,
                const std::string &mac_address,
                const std::string &local_ip,
-               const immer::array<DisplayMode> &display_modes,
+               std::span<const DisplayMode> display_modes,
                int pair_status,
                bool support_hevc,
                bool support_av1);
@@ -144,7 +142,7 @@ XML client_pair(const std::string &aes_key,
  * @param apps: a list of available apps
  * @return ptree: The XML response, a list of apps
  */
-XML applist(const immer::vector<App> &apps);
+XML applist(std::span<const App> apps);
 
 /**
  * After the user selects an app to launch we have to negotiate the IP and PORT for the RTSP session

@@ -19,7 +19,7 @@ XML serverinfo(bool isServerBusy,
                const std::string &hostname,
                const std::string &mac_address,
                const std::string &local_ip,
-               const immer::array<DisplayMode> &display_modes,
+               std::span<const DisplayMode> display_modes,
                int pair_status,
                bool support_hevc,
                bool support_av1) {
@@ -155,7 +155,7 @@ XML client_pair(const std::string &aes_key,
 }
 } // namespace pair
 
-XML applist(const immer::vector<App> &apps) {
+XML applist(std::span<const App> apps) {
   XML resp;
   auto &apps_xml = resp.add_child("root", pt::ptree{});
   apps_xml.put("<xmlattr>.status_code", 200);
