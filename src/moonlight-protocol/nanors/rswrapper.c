@@ -1,153 +1,170 @@
-/**
- * @file src/rswrapper.c
- * @brief Wrappers for nanors vectorization with different ISA options
- */
+#include <assert.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-// _FORTIY_SOURCE can cause some versions of GCC to try to inline
-// memset() with incompatible target options when compiling rs.c
-#ifdef _FORTIFY_SOURCE
-#undef _FORTIFY_SOURCE
-#endif
+#include "oblas_lite.c"
+#include "rs.h"
 
-// The assert() function is decorated with __cold on macOS which
-// is incompatible with Clang's target multiversioning feature
-#ifndef NDEBUG
-#define NDEBUG
-#endif
+static void axpy(u8 *a, u8 *b, u8 u, int k)
+{
+    if (u == 0)
+        return;
 
-#define DECORATE_FUNC_I(a, b) a##b
-#define DECORATE_FUNC(a, b) DECORATE_FUNC_I(a, b)
+    if (u == 1) {
+        register u8 *ap = a, *ae = &a[k], *bp = b;
+        for (; ap < ae; ap++, bp++)
+            *ap ^= *bp;
+    } else {
+        obl_axpy(a, b, u, k);
+    }
+}
 
-// Append an ISA suffix to the public RS API
-#define reed_solomon_init DECORATE_FUNC(reed_solomon_init, ISA_SUFFIX)
-#define reed_solomon_new DECORATE_FUNC(reed_solomon_new, ISA_SUFFIX)
-#define reed_solomon_new_static DECORATE_FUNC(reed_solomon_new_static, ISA_SUFFIX)
-#define reed_solomon_release DECORATE_FUNC(reed_solomon_release, ISA_SUFFIX)
-#define reed_solomon_decode DECORATE_FUNC(reed_solomon_decode, ISA_SUFFIX)
-#define reed_solomon_encode DECORATE_FUNC(reed_solomon_encode, ISA_SUFFIX)
+static void scal(u8 *a, u8 u, int k)
+{
+    if (u < 2)
+        return;
+    obl_scal(a, u, k);
+}
 
-// Append an ISA suffix to internal functions to prevent multiple definition errors
-#define obl_axpy_ref DECORATE_FUNC(obl_axpy_ref, ISA_SUFFIX)
-#define obl_scal_ref DECORATE_FUNC(obl_scal_ref, ISA_SUFFIX)
-#define obl_axpyb32_ref DECORATE_FUNC(obl_axpyb32_ref, ISA_SUFFIX)
-#define obl_axpy DECORATE_FUNC(obl_axpy, ISA_SUFFIX)
-#define obl_scal DECORATE_FUNC(obl_scal, ISA_SUFFIX)
-#define obl_swap DECORATE_FUNC(obl_swap, ISA_SUFFIX)
-#define obl_axpyb32 DECORATE_FUNC(obl_axpyb32, ISA_SUFFIX)
-#define axpy DECORATE_FUNC(axpy, ISA_SUFFIX)
-#define scal DECORATE_FUNC(scal, ISA_SUFFIX)
-#define gemm DECORATE_FUNC(gemm, ISA_SUFFIX)
-#define invert_mat DECORATE_FUNC(invert_mat, ISA_SUFFIX)
+static void gemm(u8 *a, u8 **b, u8 **c, int n, int k, int m)
+{
+    int ci = 0;
+    for (int row = 0; row < n; row++, ci++) {
+        u8 *ap = a + (row * k);
+        memset(c[ci], 0, m);
+        for (int idx = 0; idx < k; idx++)
+            axpy(c[ci], b[idx], ap[idx], m);
+    }
+}
 
-#if defined(__x86_64__) || defined(__i386__)
+static int invert_mat(u8 *src, u8 *wrk, u8 **dst, int V0, int K, int T, u8 *c, u8 *d)
+{
+    int V0b = V0, W = K - V0;
+    u8 u = 0;
+    for (int i = 0; i < W; i++) {
+        int dr = d[i] * K;
+        for (int j = 0; j < W; j++)
+            wrk[i * W + j] = src[dr + c[V0 + j]];
+    }
+    for (; V0 < K; V0++) {
+        int dr = d[V0 - V0b] * K;
+        for (int row = 0; row < V0b; row++) {
+            u = src[dr + c[row]];
+            axpy(dst[c[V0]], dst[c[row]], u, T);
+        }
+    }
+    for (int x = 0; x < W; x++) {
+        u = GF2_8_INV[wrk[x * W + x]];
+        scal(wrk + x * W + x, u, W);
+        scal(dst[c[V0b + x]], u, T);
+        for (int row = x + 1; row < W; row++) {
+            u = wrk[row * W + x];
+            axpy(wrk + row * W, wrk + x * W, u, W);
+            axpy(dst[c[V0b + row]], dst[c[V0b + x]], u, T);
+        }
+    }
+    for (int x = W - 1; x >= 0; x--) {
+        u8 *from = dst[c[V0b + x]];
+        for (int row = 0; row < x; row++) {
+            u = wrk[row * W + x];
+            axpy(dst[c[V0b + row]], from, u, T);
+        }
+    }
+    return 0;
+}
 
-// Compile a variant for SSSE3
-#if defined(__clang__)
-#pragma clang attribute push(__attribute__((target("ssse3"))), apply_to = function)
-#else
-#pragma GCC push_options
-#pragma GCC target("ssse3")
-#endif
-#define ISA_SUFFIX _ssse3
-#define OBLAS_SSE3
-#include "./rs.c"
-#undef OBLAS_SSE3
-#undef ISA_SUFFIX
-#if defined(__clang__)
-#pragma clang attribute pop
-#else
-#pragma GCC pop_options
-#endif
+void reed_solomon_init(void)
+{
+}
 
-// Compile a variant for AVX2
-#if defined(__clang__)
-#pragma clang attribute push(__attribute__((target("avx2"))), apply_to = function)
-#else
-#pragma GCC push_options
-#pragma GCC target("avx2")
-#endif
-#define ISA_SUFFIX _avx2
-#define OBLAS_AVX2
-#include "./rs.c"
-#undef OBLAS_AVX2
-#undef ISA_SUFFIX
-#if defined(__clang__)
-#pragma clang attribute pop
-#else
-#pragma GCC pop_options
-#endif
+reed_solomon *reed_solomon_new_static(void *buf, size_t len, int ds, int ps)
+{
+    reed_solomon *rs = buf;
 
-// Compile a variant for AVX512BW
-#if defined(__clang__)
-#pragma clang attribute push(__attribute__((target("avx512f,avx512bw"))), apply_to = function)
-#else
-#pragma GCC push_options
-#pragma GCC target("avx512f,avx512bw")
-#endif
-#define ISA_SUFFIX _avx512
-#define OBLAS_AVX512
-#include "./rs.c"
-#undef OBLAS_AVX512
-#undef ISA_SUFFIX
-#if defined(__clang__)
-#pragma clang attribute pop
-#else
-#pragma GCC pop_options
-#endif
+    if ((ds + ps) > DATA_SHARDS_MAX || ds <= 0 || ps <= 0)
+        return NULL;
 
-#endif
+    if (len < reed_solomon_bufsize(ds, ps))
+        return NULL;
 
-// Compile a default variant
-#define ISA_SUFFIX _def
-#include "./autoshim.h"
-#include "./rs.c"
-#undef ISA_SUFFIX
+    memset(buf, 0, len);
 
-#undef reed_solomon_init
-#undef reed_solomon_new
-#undef reed_solomon_new_static
-#undef reed_solomon_release
-#undef reed_solomon_decode
-#undef reed_solomon_encode
+    rs->ds = ds;
+    rs->ps = ps;
+    rs->ts = ds + ps;
 
-#include "rswrapper.h"
+    for (int j = 0; j < rs->ps; j++) {
+        u8 *row = rs->p + j * rs->ds;
+        for (int i = 0; i < rs->ds; i++)
+            row[i] = GF2_8_INV[(rs->ps + i) ^ j];
+    }
 
-reed_solomon_new_t reed_solomon_new_fn;
-reed_solomon_release_t reed_solomon_release_fn;
-reed_solomon_encode_t reed_solomon_encode_fn;
-reed_solomon_decode_t reed_solomon_decode_fn;
+    return rs;
+}
 
-/**
- * @brief This initializes the RS function pointers to the best vectorized version available.
- * @details The streaming code will directly invoke these function pointers during encoding.
- */
-void reed_solomon_init(void) {
-#if defined(__x86_64__) || defined(__i386__)
-  if (__builtin_cpu_supports("avx512f") && __builtin_cpu_supports("avx512bw")) {
-    reed_solomon_new_fn = reed_solomon_new_avx512;
-    reed_solomon_release_fn = reed_solomon_release_avx512;
-    reed_solomon_encode_fn = reed_solomon_encode_avx512;
-    reed_solomon_decode_fn = reed_solomon_decode_avx512;
-    reed_solomon_init_avx512();
-  } else if (__builtin_cpu_supports("avx2")) {
-    reed_solomon_new_fn = reed_solomon_new_avx2;
-    reed_solomon_release_fn = reed_solomon_release_avx2;
-    reed_solomon_encode_fn = reed_solomon_encode_avx2;
-    reed_solomon_decode_fn = reed_solomon_decode_avx2;
-    reed_solomon_init_avx2();
-  } else if (__builtin_cpu_supports("ssse3")) {
-    reed_solomon_new_fn = reed_solomon_new_ssse3;
-    reed_solomon_release_fn = reed_solomon_release_ssse3;
-    reed_solomon_encode_fn = reed_solomon_encode_ssse3;
-    reed_solomon_decode_fn = reed_solomon_decode_ssse3;
-    reed_solomon_init_ssse3();
-  } else
-#endif
-  {
-    reed_solomon_new_fn = reed_solomon_new_def;
-    reed_solomon_release_fn = reed_solomon_release_def;
-    reed_solomon_encode_fn = reed_solomon_encode_def;
-    reed_solomon_decode_fn = reed_solomon_decode_def;
-    reed_solomon_init_def();
-  }
+reed_solomon *reed_solomon_new(int ds, int ps)
+{
+    size_t len = reed_solomon_bufsize(ds, ps);
+    void *buf = malloc(len);
+    if (!buf)
+        return NULL;
+
+    if (reed_solomon_new_static(buf, len, ds, ps) == NULL) {
+        free(buf);
+        return NULL;
+    }
+
+    return buf;
+}
+
+void reed_solomon_release(reed_solomon *rs)
+{
+    if (rs)
+        free(rs);
+}
+
+int reed_solomon_decode(reed_solomon *rs, u8 **data, u8 *marks, int nr_shards, int bs)
+{
+    if (nr_shards < rs->ts)
+        return -1;
+
+    u8 *wrk = rs->p + 1 * rs->ps * rs->ds;
+    u8 erasures[rs->ds], colperm[rs->ds];
+    u8 gaps = 0, rowperm[rs->ds];
+
+    for (int i = 0; i < rs->ds; i++)
+        if (marks[i])
+            erasures[gaps++] = i;
+    for (int i = 0, j = 0; i < rs->ds - gaps; i++, j++) {
+        while (marks[j])
+            j++;
+        colperm[i] = j;
+    }
+    for (int i = 0, j = rs->ds - gaps; i < gaps; i++, j++)
+        colperm[j] = erasures[i];
+
+    int i = 0;
+    for (int j = rs->ds; i < gaps; i++, j++) {
+        while (marks[j])
+            j++;
+        if (j >= nr_shards)
+            break;
+        rowperm[i] = j - rs->ds;
+        memcpy(data[erasures[i]], data[j], bs);
+    }
+    if (i < gaps)
+        return -1;
+
+    invert_mat(rs->p, wrk, data, rs->ds - gaps, rs->ds, bs, colperm, rowperm);
+    return 0;
+}
+
+int reed_solomon_encode(reed_solomon *rs, u8 **shards, int nr_shards, int bs)
+{
+    if (nr_shards < rs->ts)
+        return -1;
+    gemm(rs->p, shards, shards + rs->ds, rs->ps, rs->ds, bs);
+    return 0;
 }
