@@ -24,21 +24,6 @@ target_sources(moonlight
 
 include(FetchContent)
 
-# Immutable datastructures
-FetchContent_Declare(
-        immer
-        GIT_REPOSITORY https://github.com/arximboldi/immer.git
-        GIT_TAG e02cbd795e9424a8405a8cb01f659ad61c0cbbc7)
-set(immer_BUILD_TESTS OFF)
-set(immer_BUILD_EXAMPLES OFF)
-set(immer_BUILD_DOCS OFF)
-set(immer_BUILD_EXTRAS OFF)
-
-set(FPHSA_NAME_MISMATCHED on) # see: https://github.com/arximboldi/immer/issues/204
-FetchContent_MakeAvailable(immer)
-target_link_libraries(moonlight PUBLIC immer)
-unset(FPHSA_NAME_MISMATCHED)
-
 # FEC implementation
 FetchContent_Declare(
         nanors
