@@ -17,13 +17,14 @@ std::string sign(std::string_view msg, EVP_PKEY *key_data, const EVP_MD *digest_
   if (EVP_DigestSignUpdate(ctx.get(), msg.data(), msg_size) != 1)
     handle_openssl_error("EVP_DigestSignUpdate failed");
 
-  std::size_t digest_size = 256;
+  constexpr std::size_t digest_size = 256;
   unsigned char digest[digest_size];
 
-  if (EVP_DigestSignFinal(ctx.get(), digest, &digest_size) != 1)
+  std::size_t digest_size_written = digest_size;
+  if (EVP_DigestSignFinal(ctx.get(), digest, &digest_size_written) != 1)
     handle_openssl_error("EVP_DigestSignFinal failed");
 
-  return {reinterpret_cast<char *>(digest), digest_size};
+  return {reinterpret_cast<char *>(digest), digest_size_written};
 }
 
 bool verify(std::string_view msg, std::string_view signature, EVP_PKEY *key_data, const EVP_MD *digest_type) {
