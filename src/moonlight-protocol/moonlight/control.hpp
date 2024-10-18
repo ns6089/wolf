@@ -348,6 +348,7 @@ struct ControlRGBLedPacket {
   std::uint8_t b;
 };
 
+template <size_t PayloadSize = MAX_PAYLOAD_SIZE>
 struct ControlEncryptedPacket {
   ControlPacket header; // Always 0x0001 (see PACKET_TYPE ENCRYPTED)
   std::uint32_t seq;    // Monotonically increasing sequence number (used as IV for AES-GCM)
@@ -360,7 +361,8 @@ struct ControlEncryptedPacket {
   /**
    * Rest of the bytes are the encrypted message
    */
-  char payload[MAX_PAYLOAD_SIZE]; // TODO: this should be a char* with a variable size based on header
+  char payload[PayloadSize]; // TODO: this should be a char* with a variable size based on header
+  static_assert(PayloadSize <= MAX_PAYLOAD_SIZE);
 
   /**
    * Helper function to get the payload as a string with the right size
@@ -379,7 +381,7 @@ struct ControlEncryptedPacket {
  * Given a received packet will decrypt the payload inside it.
  * This includes checking that the AES GCM TAG is valid and not tampered
  */
-static std::string decrypt_packet(const ControlEncryptedPacket &packet_data, std::string_view gcm_key) {
+static std::string decrypt_packet(const ControlEncryptedPacket<1> &packet_data, std::string_view gcm_key) {
   std::array<std::uint8_t, GCM_TAG_SIZE> iv_data = {0};
   iv_data[0] = boost::endian::little_to_native(packet_data.seq);
 
@@ -393,7 +395,7 @@ static std::string decrypt_packet(const ControlEncryptedPacket &packet_data, std
 /**
  * Turns a payload into a properly formatted control encrypted packet
  */
-static std::unique_ptr<ControlEncryptedPacket>
+static std::unique_ptr<ControlEncryptedPacket<>>
 encrypt_packet(std::string_view gcm_key, std::uint32_t seq, std::string_view payload) {
   std::array<std::uint8_t, GCM_TAG_SIZE> iv_data = {0};
   iv_data[0] = boost::endian::native_to_little(seq);
@@ -411,7 +413,7 @@ encrypt_packet(std::string_view gcm_key, std::uint32_t seq, std::string_view pay
   std::copy(gcm_tag.begin(), gcm_tag.end(), encrypted_pkt.gcm_tag);
   std::copy(encrypted_str.begin(), encrypted_str.end(), encrypted_pkt.payload);
 
-  return std::make_unique<ControlEncryptedPacket>(encrypted_pkt);
+  return std::make_unique<ControlEncryptedPacket<>>(encrypted_pkt);
 }
 
 static constexpr const char *packet_type_to_str(pkts::PACKET_TYPE p) noexcept {
