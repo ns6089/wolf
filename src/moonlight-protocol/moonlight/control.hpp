@@ -264,7 +264,11 @@ enum MOTION_TYPE : uint8_t {
   GYROSCOPE = 0x02
 };
 
+#ifdef BATTERY_PERCENTAGE_UNKNOWN
+static_assert(BATTERY_PERCENTAGE_UNKNOWN == 0xFF);
+#else
 constexpr uint8_t BATTERY_PERCENTAGE_UNKNOWN = 0xFF;
+#endif
 
 enum BATTERY_STATE : unsigned short {
   BATTERY_STATE_UNKNOWN = 0x0,
