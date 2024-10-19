@@ -301,7 +301,8 @@ struct CONTROLLER_BATTERY_PACKET : INPUT_PKT {
 
 static constexpr int GCM_TAG_SIZE = 16;
 static constexpr int MAX_PAYLOAD_SIZE = 128;
-static constexpr std::uint32_t TERMINATE_REASON_GRACEFULL = boost::endian::native_to_big(0x80030023);
+// Doesn't evaluate to constexpr in Visual Studio
+//static constexpr std::uint32_t TERMINATE_REASON_GRACEFULL = boost::endian::native_to_big(0x80030023);
 
 struct ControlPacket {
   pkts::PACKET_TYPE type;
@@ -310,7 +311,8 @@ struct ControlPacket {
 
 struct ControlTerminatePacket {
   ControlPacket header = {.type = pkts::TERMINATION, .length = sizeof(std::uint32_t)};
-  std::uint32_t reason = TERMINATE_REASON_GRACEFULL;
+  //std::uint32_t reason = TERMINATE_REASON_GRACEFULL;
+  std::uint32_t reason = boost::endian::native_to_big(0x80030023);
 };
 
 struct ControlRumblePacket {
